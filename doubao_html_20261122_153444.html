@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>学生随机点名工具 V4.0 - 免费离线课堂点名软件</title>
+  <meta name="description" content="学生随机点名工具，完全免费离线，支持学号/姓名抽取、多名单、标签筛选、权重模式、悬浮投影窗口、历史统计，Windows本地软件。">
+  <script>
+    if(window.matchMedia('(prefers-color-scheme: dark)').matches){
+      document.documentElement.classList.add('dark');
+    }
+  </script>
+  <style>
+    :root{
+      --text:#1f2937;
+      --text-sub:#4b5563;
+      /* 浅色液态玻璃参数：低不透明度，实现通透，不是实底色 */
+      --glass-bg: rgba(255,255,255,0.14);
+      --glass-border: rgba(255,255,255,0.45);
+      --glass-inner-top: rgba(255,255,255,0.35);
+      --glass-inner-bottom: rgba(255,255,255,0.05);
+      --glass-shadow: rgba(31,41,55,0.06);
+
+      --primary:#3b82f6;
+      --primary-hover:#2563eb;
+      --success:#10b981;
+      --warning:#f59e0b;
+      --danger:#ef4444;
+      --dock-height:82px;
+      --scroll-trigger:80px;
+    }
+    .dark{
+      --text:#f3f4f6;
+      --text-sub:#9ca3af;
+      /* 深色模式液态玻璃，底色很低，透出背景光晕 */
+      --glass-bg: rgba(15, 23, 42, 0.18);
+      --glass-border: rgba(255,255,255,0.18);
+      --glass-inner-top: rgba(255,255,255,0.12);
+      --glass-inner-bottom: rgba(0,0,0,0.05);
+      --glass-shadow: rgba(0,0,0,0.18);
+
+      --primary:#60a5fa;
+      --primary-hover:#3b82f6;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    html {
+      scroll-behavior: smooth;
+    }
+    body{
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Microsoft YaHei",sans-serif;
+      color:var(--text);
+      line-height:1.7;
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+      /* 液态渐变流动背景 */
+      background:
+        radial-gradient(circle at 10% 15%, rgba(124, 58, 237, 0.32), transparent 32%),
+        radial-gradient(circle at 90% 20%, rgba(236, 72, 153, 0.24), transparent 35%),
+        radial-gradient(circle at 70% 85%, rgba(20, 184, 166, 0.26), transparent 30%),
+        radial-gradient(circle at 25% 80%, rgba(59, 130, 246, 0.28), transparent 33%),
+        #e8edfb;
+      transition: color .3s;
+      padding-bottom: calc(var(--dock-height) + 20px);
+    }
+    .dark body {
+      background:
+        radial-gradient(circle at 10% 15%, rgba(124, 58, 237, 0.35), transparent 32%),
+        radial-gradient(circle at 90% 20%, rgba(236, 72, 153, 0.22), transparent 35%),
+        radial-gradient(circle at 70% 85%, rgba(20, 184, 166, 0.22), transparent 30%),
+        radial-gradient(circle at 25% 80%, rgba(59, 130, 246, 0.26), transparent 33%),
+        #0f172a;
+    }
+    /* 背景浮动光晕 液态流体动画 */
+    body::before, body::after{
+      content:"";
+      position: fixed;
+      width:450px;height:450px;
+      border-radius:50%;
+      filter: blur(110px);
+      opacity:0.45;
+      z-index:-1;
+      pointer-events:none;
+    }
+    body::before{
+      background:#8b5cf6;
+      top:-140px;
+      left:-120px;
+      animation: floatA 16s ease-in-out infinite alternate;
+    }
+    body::after{
+      background:#ec4899;
+      bottom:-130px;
+      right:-110px;
+      animation: floatB 19s ease-in-out infinite alternate;
+    }
+    @keyframes floatA {
+      0% {transform: translate(0,0) scale(1);}
+      100% {transform: translate(120px,90px) scale(1.15);}
+    }
+    @keyframes floatB {
+      0% {transform: translate(0,0) scale(1);}
+      100% {transform: translate(-100px,-80px) scale(1.2);}
+    }
+
+    .container{max-width:1120px;margin:0 auto;padding:0 24px;}
+
+    /* ===== 顶部【悬浮跟随标题栏】 默认隐藏，向下滚动才滑入显示 ===== */
+    .fixed-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 99;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:8px 16px;
+
+      transform: translateY(-110%);
+      opacity:0;
+      transition: transform 0.28s ease-out, opacity 0.28s ease-out;
+    }
+    .fixed-header.show-sticky{
+      transform: translateY(0);
+      opacity:1;
+    }
+    .fixed-header .glass{
+      padding:10px 24px;
+      width:100%;
+      max-width:1120px;
+      text-align:center;
+    }
+    .fixed-header h1{
+      font-size:1.4rem;
+      margin:0 0 4px 0;
+    }
+    .fixed-header .sub-desc{
+      font-size:0.88rem;
+      color:var(--text-sub);
+      margin-bottom:6px;
+    }
+    .fixed-header .badge-wrap{
+      display:flex;
+      flex-wrap:wrap;
+      gap:4px;
+      justify-content:center;
+    }
+    .fixed-header .badge{
+      padding:2px 8px;
+      font-size:0.75rem;
+      margin:0;
+    }
+
+    /* ===== 底部Dock导航栏 macOS风格，一直显示 ===== */
+    .dock-bar{
+      position:fixed;
+      bottom:12px;
+      left:50%;
+      transform: translateX(-50%);
+      z-index:99;
+    }
+    .dock-wrap{
+      display:flex;
+      gap:6px;
+      padding:10px 18px;
+    }
+    .dock-item{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      text-decoration:none;
+      color:var(--text);
+      transition: transform 0.22s ease;
+      padding:4px 8px;
+    }
+    .dock-item .icon{
+      font-size:26px;
+      margin-bottom:2px;
+      transition: transform 0.22s ease;
+    }
+    .dock-item .label{
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .dock-item:hover{
+      transform: translateY(-8px);
+    }
+    .dock-item:hover .icon{
+      transform: scale(1.25);
+    }
+
+    /* ===================== 【真正液态玻璃】重点修改 ===================== */
+    .glass{
+      /* 低透明度底色 + 强模糊，让底下流体光晕透上来 */
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(26px) saturate(180%);
+      -webkit-backdrop-filter: blur(26px) saturate(180%);
+      border-radius: 22px;
+      box-shadow:
+        0 10px 32px var(--glass-shadow),
+        /* 模拟玻璃顶部高光反光 */
+        inset 0 1px 0 var(--glass-inner-top),
+        /* 微弱底部折射 */
+        inset 0 -1px 0 var(--glass-inner-bottom);
+    }
+
+    /*页面内部原生静态头部（刚打开页面就看得到，不是fixed悬浮） */
+    .static-header{
+      text-align:center;
+      padding:40px 0 20px;
+    }
+    .static-header h1{
+      font-size:1.8rem;
+      margin-bottom:6px;
+    }
+    .static-header .sub-desc{
+      font-size:1rem;
+      color:var(--text-sub);
+      margin-bottom:10px;
+    }
+    .static-header .badge-wrap{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      justify-content:center;
+      margin-bottom:24px;
+    }
+
+    h2{font-size:1.8rem;margin-bottom:28px;text-align:center;}
+    .badge{
+      display:inline-block;
+      padding:5px 13px;
+      border-radius:999px;
+      background: var(--glass-bg);
+      border:1px solid var(--glass-border);
+      backdrop-filter: blur(18px) saturate(160%);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      box-shadow: inset 0 1px 0 var(--glass-inner-top);
+      font-size:0.9rem;
+      margin:0 5px 8px;
+    }
+    .btn-group{margin:20px 0;display:flex;gap:18px;flex-wrap:wrap;justify-content:center;}
+    a.btn{
+      display:inline-block;
+      padding:15px 30px;
+      border-radius:14px;
+      text-decoration:none;
+      font-weight:600;
+      font-size:1.05rem;
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .btn:hover {
+      transform: translateY(-3px);
+    }
+    .btn-primary{
+      background:var(--primary);
+      color:#fff;
+      box-shadow: 0 8px 22px rgba(59,130,246,0.35);
+    }
+    .btn-primary:hover{background:var(--primary-hover);}
+    .btn-outline{
+      background: var(--glass-bg);
+      border:1px solid var(--glass-border);
+      backdrop-filter: blur(18px) saturate(160%);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      box-shadow: inset 0 1px 0 var(--glass-inner-top);
+      color:var(--text);
+    }
+
+    section{margin:70px 0;}
+    .grid-3{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(285px,1fr));
+      gap:26px;
+    }
+    .card{
+      padding:26px;
+      transition: transform .25s ease;
+    }
+    .card:hover{
+      transform: translateY(-6px);
+    }
+    .card h3{margin-bottom:12px;font-size:1.22rem;}
+    .card p{color:var(--text-sub);}
+
+    .info-block{
+      padding:30px;
+    }
+    .faq-item{
+      border-bottom:1px solid var(--glass-border);
+      padding:18px 0;
+    }
+    .faq-item:last-child{border-bottom:none;}
+    .faq-q{font-weight:bold;margin-bottom:8px;}
+    .faq-a{color:var(--text-sub);}
+
+    footer{
+      text-align:center;
+      padding:20px 20px;
+      color:var(--text-sub);
+      margin-top:50px;
+    }
+
+    /* 截图占位容器，纯样式，无图片 */
+    .screenshot-wrap{
+      width:100%;
+      padding:70px 24px;
+      text-align:center;
+      color:var(--text-sub);
+      margin:24px 0;
+    }
+    ul,ol {
+      padding-left:24px;
+    }
+    .pwd-hint{
+      font-family:Consolas,monospace;
+      font-weight:bold;
+      color:var(--warning);
+    }
+
+    /* ========= 移动端适配 ========= */
+    @media (max-width:640px){
+      :root{
+        --dock-height:64px;
+      }
+      .fixed-header h1{
+        font-size:1.1rem;
+      }
+      .fixed-header .sub-desc{
+        font-size:0.78rem;
+      }
+      .dock-wrap{
+        gap:2px;
+        padding:8px 12px;
+      }
+      .dock-item .icon{
+        font-size:22px;
+      }
+      .dock-item .label{
+        font-size:10px;
+      }
+      h2{
+        font-size:1.4rem;
+      }
+      .static-header h1{
+        font-size:1.4rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- =========【悬浮跟随标题栏】默认隐藏，向下滚动>80px才滑入显示 ========= -->
+<div class="fixed-header" id="stickyHeader">
+  <div class="glass">
+    <h1>🎯 学生随机点名工具 V4.0</h1>
+    <div class="sub-desc">Windows 课堂随机点名软件｜完全免费 · 离线本地 · 无广告 · 无需联网注册</div>
+    <div class="badge-wrap">
+      <span class="badge">学号抽取</span>
+      <span class="badge">姓名抽取</span>
+      <span class="badge">Excel导入</span>
+      <span class="badge">多名单管理</span>
+      <span class="badge">标签筛选</span>
+      <span class="badge">权重模式</span>
+      <span class="badge">悬浮投影窗</span>
+      <span class="badge">语音播报</span>
+      <span class="badge">历史统计导出</span>
+    </div>
+  </div>
+</div>
+
+<!-- 底部Dock导航栏，一直可见 -->
+<div class="dock-bar glass">
+  <div class="dock-wrap">
+    <a href="#top" class="dock-item">
+      <div class="icon">🏠</div>
+      <div class="label">首页</div>
+    </a>
+    <a href="#feature" class="dock-item">
+      <div class="icon">✨</div>
+      <div class="label">功能</div>
+    </a>
+    <a href="#download" class="dock-item">
+      <div class="icon">📥</div>
+      <div class="label">下载</div>
+    </a>
+    <a href="#quickstart" class="dock-item">
+      <div class="icon">📖</div>
+      <div class="label">快速上手</div>
+    </a>
+    <a href="#faq" class="dock-item">
+      <div class="icon">❓</div>
+      <div class="label">FAQ</div>
+    </a>
+  </div>
+</div>
+
+<div class="container" id="top">
+<!-- =========页面原生静态头部：刚打开页面直接看到标题，不是fixed悬浮 ========= -->
+<div class="static-header">
+  <h1>🎯 学生随机点名工具 V4.0</h1>
+  <div class="sub-desc">Windows 课堂随机点名软件｜完全免费 · 离线本地 · 无广告 · 无需联网注册</div>
+  <div class="badge-wrap">
+    <span class="badge">学号抽取</span>
+    <span class="badge">姓名抽取</span>
+    <span class="badge">Excel导入</span>
+    <span class="badge">多名单管理</span>
+    <span class="badge">标签筛选</span>
+    <span class="badge">权重模式</span>
+    <span class="badge">悬浮投影窗</span>
+    <span class="badge">语音播报</span>
+    <span class="badge">历史统计导出</span>
+  </div>
+  <div class="btn-group">
+    <a class="btn btn-primary" href="#download">📥 下载软件</a>
+    <a class="btn btn-outline glass" href="#feature">✨ 全部功能</a>
+    <a class="btn btn-outline glass" href="#faq">常见问题</a>
+  </div>
+  <div class="screenshot-wrap glass">
+    【此处放置软件主界面截图】<br>替换为 &lt;img src="xxx.png" alt="软件截图"&gt;
+  </div>
+</div>
+
+  <main>
+  <section id="feature">
+    <h2>主要功能</h2>
+    <div class="grid-3">
+      <div class="card glass">
+        <h3>双模式抽取</h3>
+        <p>学号模式无需名单直接抽取数字；姓名模式从Excel导入学生名单，支持手动增删名字。</p>
+      </div>
+      <div class="card glass">
+        <h3>多班级名单</h3>
+        <p>创建多套名单，一班、二班分开管理，名单切换，标签分组筛选，限定抽取范围。</p>
+      </div>
+      <div class="card glass">
+        <h3>Excel智能导入</h3>
+        <p>支持xlsx/xls，拖拽导入，支持按列、单元格精细选择，自动过滤表头、学号、无效文本。</p>
+      </div>
+      <div class="card glass">
+        <h3>权重概率模式</h3>
+        <p>可调整每个学生抽中概率（0‑10），适合课堂重点提问；开启会弹出公平性警告。</p>
+      </div>
+      <div class="card glass">
+        <h3>悬浮投影窗口</h3>
+        <p>置顶无边框小窗口，上课大屏投影，不遮挡课件，和主程序数据同步。</p>
+      </div>
+      <div class="card glass">
+        <h3>语音播报 &amp; 副结果</h3>
+        <p>抽选完成自动朗读名字；支持同时显示2个备选副结果，活跃课堂氛围。</p>
+      </div>
+      <div class="card glass">
+        <h3>历史记录与统计</h3>
+        <p>保存每一次抽取记录，可以导出CSV/Excel；统计每个人被抽中次数、覆盖率。</p>
+      </div>
+      <div class="card glass">
+        <h3>数据迁移备份</h3>
+        <p>cfgpack配置包导出导入，换电脑一键迁移全部名单、标签、权重、历史记录，导入限时撤销。</p>
+      </div>
+      <div class="card glass">
+        <h3>内置离线帮助助手</h3>
+        <p>软件内置帮助小助手，关键词问答，不需要联网，解决绝大多数操作疑问。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <h2>下载与系统要求</h2>
+    <div class="info-block glass">
+      <h3>🖥️ 运行环境</h3>
+      <ul style="margin:12px 0 12px 22px;">
+        <li>操作系统：Windows7 SP1 / Win8 / Win10 / Win11</li>
+        <li>Win7/Win8：不支持深色主题，部分动画效果降级</li>
+        <li>完全离线运行，不需要网络，不需要登录账号</li>
+      </ul>
+      <br>
+      <div class="btn-group" style="justify-content:flex-start;">
+        <a class="btn btn-primary" target="_blank" href="https://nrhxh.lanzoum.com/iLCxn4gyw7ti">⬇️ 前往蓝奏云下载 v4.0（43.1M）</a>
+      </div>
+      <p style="margin-top:12px;color:var(--text-sub);">
+        🔑 蓝奏云提取密码：<span class="pwd-hint">1qjb</span>
+      </p>
+    </div>
+  </section>
+
+  <section id="quickstart">
+    <h2>快速上手</h2>
+    <div class="info-block glass">
+      <ol style="margin-left:22px;">
+        <li>打开软件，首次启动会弹出初始化向导；</li>
+        <li>选择模式：学号模式直接设置数字范围；姓名模式导入Excel名单；</li>
+        <li>（可选）设置标签、权重、语音播报、悬浮窗口；</li>
+        <li>点击【开始抽取】执行随机点名；</li>
+        <li>查看历史记录、统计面板导出记录；</li>
+        <li>换电脑：导出cfgpack配置包，新电脑执行导入配置。</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2>常见问题 FAQ</h2>
+    <div class="info-block glass">
+      <div class="faq-item">
+        <div class="faq-q">软件收费吗？会不会有广告？</div>
+        <div class="faq-a">完全免费开源，无广告，无需注册登录，全部数据保存在本地电脑。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Mac / Linux可以使用吗？</div>
+        <div class="faq-a">当前版本基于Windows API开发，仅支持Windows系统。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">导入Excel失败怎么办？</div>
+        <div class="faq-a">关闭正在打开的表格文件；优先使用xlsx格式；可以复制名字粘贴到软件手动编辑名单。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">权重模式是什么？</div>
+        <div class="faq-a">权重会改变随机概率，不再绝对公平，开启必须同时开启“禁用防重复抽取”。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">换电脑如何迁移我的班级名单？</div>
+        <div class="faq-a">菜单选择导出配置，生成cfgpack文件，复制到新电脑执行导入配置。导入后5分钟内支持撤销。</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">软件点不动、没反应如何排查？</div>
+        <div class="faq-a">确认已经导入名单；查看菜单内错误日志；名单不要全部被标签过滤为空。</div>
+      </div>
+    </div>
+  </section>
+  </main>
+
+<footer>
+  <p>学生随机点名工具 V4.0｜本地离线免费软件</p>
+  <p style="font-size:0.9rem;margin-top:6px;">本网站为静态页面，仅提供软件介绍与下载</p>
+</footer>
+</div>
+
+<script>
+//滚动监听逻辑：滚动超过 --scroll-trigger(80px)，顶部fixed标题栏滑入显示，回到顶部则隐藏
+const stickyHeader = document.getElementById('stickyHeader');
+const TRIGGER = 80; //向下滚动超过80像素，出现悬浮标题栏
+
+function checkScroll(){
+  const scrollY = window.scrollY || document.documentElement.scrollTop;
+  if(scrollY > TRIGGER){
+    stickyHeader.classList.add('show-sticky');
+  }else{
+    stickyHeader.classList.remove('show-sticky');
+  }
+}
+//节流，避免scroll高频触发
+let ticking = false;
+window.addEventListener('scroll', function(){
+  if(!ticking){
+    window.requestAnimationFrame(function(){
+      checkScroll();
+      ticking = false;
+    });
+    ticking = true;
+  }
+});
+//页面刚载入执行一次
+checkScroll();
+</script>
+</body>
+</html>
+<!-- （注：内容由AI生成） -->
